@@ -1,10 +1,10 @@
 package service
 
 import (
-	"net/url"
-	"strings"
 	"github.com/QubitProducts/bamboo/Godeps/_workspace/src/github.com/samuel/go-zookeeper/zk"
 	conf "github.com/QubitProducts/bamboo/configuration"
+	"net/url"
+	"strings"
 )
 
 type Service struct {
@@ -30,7 +30,6 @@ func All(conn *zk.Conn, zkConf conf.Zookeeper) (map[string]Service, error) {
 		bite, _, e := conn.Get(zkConf.Path + "/" + childPath)
 		if e != nil {
 			return nil, e
-			break
 		}
 		appId, _ := unescapeSlashes(childPath)
 		services[appId] = Service{Id: appId, Acl: string(bite)}

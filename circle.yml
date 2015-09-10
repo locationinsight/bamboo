@@ -1,30 +1,20 @@
 # circle.yml
 machine:
-  ruby:
-    version: 2.1.1
-  environment:
-    FOO: up
-    BAMBOO_PROJECT_DIR: /home/ubuntu/bamboo
-    WORKSPACE: /home/ubuntu/bamboo
+  services:
+    - docker
 
 dependencies:
-  pre:
-    - gem install fpm --pre
-    - go get github.com/tools/godep
-    - go get bitbucket.org/tebeka/go2xunit
-    - go get -t github.com/smartystreets/goconvey
-  post:
-    - bash $WORKSPACE/builder/build.sh
+  override:
+    - docker build -t placeable/qubit-bamboo:$CIRCLE_BRANCH-$CIRCLE_BUILD_NUM_$CIRCLE_SHA1 .
+    - docker tag placeable/qubit-bamboo:$CIRCLE_BRANCH-$CIRCLE_BUILD_NUM_$CIRCLE_SHA1 placeable/qubit-bamboo:latest
 
 test:
-  pre:
   override:
-    - mkdir -p  $WORKSPACE/test_output
-    - go test -v github.com/QubitProducts/bamboo/... | go2xunit > $WORKSPACE/test_output/tests.xml
+    - docker images
 
 deployment:
-  production:
-    branch: master
+  hub:
+    branch: ab_rebase_to_qubit
     commands:
-      - sudo pip install awscli
-      - aws s3 sync builder/ s3://placeable-artifacts/qubit-bamboo/ --exclude "*"  --include "*.deb"
+      - docker login -e $DOCKER_EMAIL -u $DOCKER_USER -p $DOCKER_PASS
+      - docker push placeable/qubit-bamboo

@@ -64,8 +64,8 @@ This section tries to explain usage in code comment style:
 {
   // Marathon instance configuration
   "Marathon": {
-    // Marathon service HTTP endpoint
-    "Endpoint": "http://localhost:8080"
+    // Marathon service HTTP endpoints
+    "Endpoint": "http://marathon1:8080,http://marathon2:8080,http://marathon3:8080"
   },
 
   "Bamboo": {
@@ -83,15 +83,20 @@ This section tries to explain usage in code comment style:
       "ReportingDelay": 5
     }
   }
-  
-  
+
+
   // Make sure using absolute path on production
   "HAProxy": {
     "TemplatePath": "/var/bamboo/haproxy_template.cfg",
     "OutputPath": "/etc/haproxy/haproxy.cfg",
-    "ReloadCommand": "haproxy -f /etc/haproxy/haproxy.cfg -p /var/run/haproxy.pid -D -sf $(cat /var/run/haproxy.pid)"
+    "ReloadCommand": "haproxy -f /etc/haproxy/haproxy.cfg -p /var/run/haproxy.pid -D -sf $(cat /var/run/haproxy.pid)",
+    // A command that will validate the config before running reload command.
+    // '{{.}}' will be expanded to a temporary path that contains the config contents
+    "ReloadValidationCommand": "haproxy -c -f {{.}}",
+    // A command that will always be run after ReloadCommand, even if the reload fails
+    "ReloadCleanupCommand": "exit 0"
   },
-  
+
   // Enable or disable StatsD event tracking
   "StatsD": {
     "Enabled": false,
@@ -134,6 +139,8 @@ Configuration in the `production.json` file can be overridden with environment v
 Environment Variable | Corresponds To
 ---------------------|---------------
 `MARATHON_ENDPOINT` | Marathon.Endpoint
+`MARATHON_USER` | Marathon.User
+`MARATHON_PASSWORD` | Marathon.Password
 `BAMBOO_ENDPOINT` | Bamboo.Endpoint
 `BAMBOO_ZK_HOST` | Bamboo.Zookeeper.Host
 `BAMBOO_ZK_PATH` | Bamboo.Zookeeper.Path
@@ -218,18 +225,24 @@ curl -i http://localhost:8000/status
 ## Deployment
 
 We recommend installing binary with deb or rpm package. 
-The repository includes examples of [a Jenkins build script](https://github.com/QubitProducts/bamboo/blob/master/builder/ci-jenkins.sh)
-and [a deb packages build script](https://github.com/QubitProducts/bamboo/blob/master/builder/build.sh).
-Read comments in the script to customize your build distribution workflow.
 
-In short, [install fpm](https://github.com/jordansissel/fpm) and run the following command:
+The repository includes an example deb package build script called [builder/build.sh](./builder/build.sh) which generates a deb package in `./output`. For this install [fpm](https://github.com/jordansissel/fpm) and run:
 
 ```
 go build bamboo.go
 ./builder/build.sh
 ```
 
-A deb package will be generated in `./builder` directory. You can copy to a server or publish to your own apt repository.
+Moreover, there is
+- a [Jenkins build script](builder/ci-jenkins.sh) to run `build.sh` from a Jenkins job
+- and a [Docker build container](builder/build.sh) which will generate the deb package in the volume mounted output directory:
+
+  ```
+  docker build -f Dockerfile-deb -t bamboo-build
+  docker run -it -v $(pwd)/output bamboo-build
+  ```
+
+Independently how you build the deb package, you can copy it to a server or publish to your own apt repository.
 
 The example deb package deploys:
 
@@ -266,13 +279,13 @@ Once the image has been built, running as a container is straightforward - you d
 
 ````
 docker run -t -i --rm -p 8000:8000 -p 80:80 \
-    -e MARATHON_ENDPOINT=http://marathon:8080 \
+    -e MARATHON_ENDPOINT=http://marathon1:8080,http://marathon2:8080,http://marathon3:8080 \
     -e BAMBOO_ENDPOINT=http://bamboo:8000 \
-    -e BAMBOO_ZK_HOST=zk:2181 \
+    -e BAMBOO_ZK_HOST=zk01.example.com:2181,zk02.example.com:2181 \
     -e BAMBOO_ZK_PATH=/bamboo \
-    -e BIND=":8000"
-    -e CONFIG_PATH="config/production.example.json"
-    -e BAMBOO_DOCKER_AUTO_HOST=true
+    -e BIND=":8000" \
+    -e CONFIG_PATH="config/production.example.json" \
+    -e BAMBOO_DOCKER_AUTO_HOST=true \
     bamboo
 ````
 
